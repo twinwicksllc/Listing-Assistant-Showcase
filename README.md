@@ -13,6 +13,39 @@
 
 ---
 
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="screenshots/01-capture-item.png" alt="Capture Item – AI Upload Flow" width="100%"/>
+      <br/><sub><b>AI Listing Generation</b> — Upload photos, Gemini Vision analyzes and generates title, description, category & item specifics</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="screenshots/02-dashboard-pl.png" alt="Dashboard – Sales & P&L Overview" width="100%"/>
+      <br/><sub><b>Dashboard & P&L</b> — Real-time inventory value, 30/90-day sales, true net profit with full fee breakdown</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="screenshots/04-admin-analytics.png" alt="Admin Analytics – AI Usage Charts" width="100%"/>
+      <br/><sub><b>AI Usage Analytics</b> — Feature usage, daily AI call bar chart, cost trend line, token consumption & cost tracking</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="screenshots/03-settings-integrations.png" alt="Settings – eBay Integration" width="100%"/>
+      <br/><sub><b>eBay Integration</b> — OAuth-connected eBay account management with live connection status</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="screenshots/05-billing-plans.png" alt="Billing – Subscription Plans" width="75%"/>
+      <br/><sub><b>Subscription Plans</b> — Free · Starter · Pro · Shop tiers with Stripe billing management</sub>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 📖 What Is It?
 
 Listing Assistant Pro is a full-stack Progressive Web App that dramatically accelerates the process of creating high-quality eBay listings for coins, bullion, and collectibles. Sellers upload photos, and the app uses **Google Gemini AI** to instantly generate optimized titles, descriptions, eBay category IDs, and item specifics — all without manual data entry.
