@@ -57,9 +57,10 @@ The platform goes far beyond listing creation: it includes a real-time analytics
 ## ✨ Feature Highlights
 
 ### 🤖 AI-Powered Listing Generation
-- Upload one or more photos of an item from any angle
+- Upload one or more photos of an item from any angle — or **record a short video**; the app automatically extracts the sharpest, most representative frames for AI analysis
 - Gemini AI analyzes the images and generates a full listing: **title, description, eBay category, and item specifics**
 - **Voice notes** can be recorded and transcribed to give the AI additional context (coin grade, condition notes, provenance, etc.)
+- **Self-learning eBay category matching**: a weekly sync pulls eBay's complete, current category taxonomy so category suggestions stay accurate as eBay renames/retires categories, backed by an automated hygiene job that decays and expires low-confidence matches over time
 
 ### 💰 Smart Pricing Engine
 - Fetches recent **sold eBay listings** to suggest an accurate price range
@@ -69,7 +70,9 @@ The platform goes far beyond listing creation: it includes a real-time analytics
 - Publishes listings directly to eBay via the **eBay Inventory & Trading APIs**
 - Handles eBay **Business Policy** selection (fulfillment, payment, returns) with a 24-hour cache for performance
 - Full **eBay Taxonomy integration**: auto-discovers the correct category, fetches required item specifics, and validates all aspect values against eBay's allowed lists before publish
+- Accurately forwards **shipping weight and package dimensions** to eBay — weight and dimensions are handled independently, so partial input (e.g. an envelope with only height & width) still reaches the listing instead of being dropped
 - Supports both **Fixed Price** and **Auction** listing formats
+- **Bulk publish** from a CSV upload with tier-based row caps (Starter 5 / Pro 50 / Shop 1,000 rows per batch)
 
 ### 📊 Analytics Dashboard
 - Multi-window analytics: **7-day / 30-day / 90-day** views side by side
@@ -100,6 +103,11 @@ The platform goes far beyond listing creation: it includes a real-time analytics
 - **Title Optimizer**: AI rewrites listing titles using high-performing keywords from competitor research
 - **Duplicate Listing Detector**: client-side Jaccard similarity analysis to surface near-duplicate listings
 
+### 📉 Cost & Quality Monitoring
+- **AI cost alerts**: scheduled job flags unusual spikes in AI token/API spend before they become a billing surprise
+- **Domain quality reports**: tracks how accurately the AI is classifying item domains (coins/bullion vs. general merchandise) over time
+- **Scheduled competitor price refresh**: keeps competitor snapshots current in the background instead of only on-demand
+
 ### 👥 Teams & Organizations
 - Multi-user organization support with per-org usage quotas
 - Role-based access (owner vs. member)
@@ -115,43 +123,64 @@ The platform goes far beyond listing creation: it includes a real-time analytics
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+┌──────────────────────┐     ┌──────────────────┐     ┌──────────────────┐
 │   React 18 PWA  │────▶│  Supabase Auth   │────▶│  Google OAuth /  │
 │   (Frontend)    │     │                  │     │  Email Auth      │
-└────────┬────────┘     └──────────────────┘     └──────────────────┘
+└────────┬─────┘     └────────────────┘     └──────────────────┘
          │
-         ├──────────────���───┬───────────────────┬──────────────────┐
+         ├────────────────���───┬─────────────────┬──────────────────┐
          │                  │                   │                  │
          ▼                  ▼                   ▼                  ▼
-┌──────────────┐  ┌──────────────────┐  ┌────────────┐  ┌──────────────┐
+┌──────────────┐  ┌──────────────────┐  ┌──────────┐  ┌──────────────┐
 │  Supabase    │  │  Supabase Edge   │  │  eBay APIs │  │  Stripe API  │
 │  PostgreSQL  │  │  Functions (Deno)│  │  (Inventory│  │  (Billing)   │
 │  (Database)  │  │                  │  │  Trading,  │  │              │
-└──────────────┘  └────────┬─────────┘  │  Finding)  │  └──────────────┘
-                           │            └────────────┘
-                  ┌────────┴──────────┐
+└──────────────┘  └────────┬───────┘  │  Finding)  │  └──────────────┘
+                           │            └──────────┘
+                  ┌────────┬──────────┐
                   │  Google Gemini AI │
                   │  (Vision + Text)  │
-                  └───────────────────┘
+                  └──────────────────┘
 ```
 
 ### Supabase Edge Functions
 
 | Function | Purpose |
 |---|---|
-| `analyze-item` | Sends images to Gemini, returns title/description/category/aspects |
+| `analyze-item` | Sends images/video frames to Gemini, returns title/description/category/aspects |
+| `video-frame-extract` | Extracts the sharpest, most representative frames from an uploaded item video |
 | `ebay-publish` | Creates or publishes a listing to eBay via Inventory API |
+| `bulk-publish` | Publishes a batch of CSV-sourced listings, gated by plan-tier row caps |
 | `ebay-listings` | Fetches active eBay listings with multi-window analytics |
 | `ebay-pricing` | Fetches recent sold comps for price suggestions |
 | `ebay-competitor-search` | Searches eBay for competitor listings on a given item |
-| `spot-prices` | Fetches & caches live metal spot prices (12-hour TTL) |
-| `category-lookup` | eBay category suggestions from a product description |
+| `competitor-prices-cron` | Scheduled background refresh of competitor price snapshots |
+| `filter-comparable-listings` | Filters competitor search results down to genuinely comparable items |
+| `keyword-research` | eBay Browse API search stats (price distribution, sold counts) for market research |
+| `market-watch-refresh` | Refreshes saved Market Watches with live eBay pricing data |
+| `optimize-listing` | Analyzes a live listing's market data to suggest title/price improvements |
+| `ebay-reprice` | Executes single or bulk price updates against eBay (Inventory + legacy Trading API) |
+| `auto-reprice-cron` | Scheduled job that applies each user's configured repricing rules |
+| `auto-reprice-trigger` | On-demand trigger for evaluating repricing rules outside the schedule |
+| `spot-prices` | Fetches & caches live metal spot prices (shared cache across users) |
+| `category-lookup` | 4-tier eBay category resolution: DB match, eBay suggestions, Gemini fallback, plus aspect-rule caching |
+| `sync-ebay-taxonomy` | Weekly job that pulls eBay's entire active category tree into the taxonomy cache |
+| `category-hygiene-cron` | Weekly cleanup: dedupes/decays/expires low-confidence category mappings and stale cache rows |
+| `setup-categories` | One-time DB bootstrap/seed for category reference tables |
+| `domain-quality-report` | Reports on AI item-domain classification accuracy over time |
+| `cost-alert-cron` | Flags unusual spikes in AI/API cost before they hit billing |
+| `cogs-report` | Pulls eBay Finances API shipping label costs to compute accurate P&L |
+| `ebay-policies` | Fetches and caches the seller's eBay business policies (fulfillment/payment/return) |
+| `ebay-user` | Fetches the connected eBay account's profile info |
+| `disconnect-ebay` | Revokes/clears a user's eBay OAuth connection |
 | `transcribe-voice` | Transcribes voice note audio for AI context |
-| `create-checkout` | Creates Stripe checkout sessions for plan upgrades |
+| `create-checkout` | Creates Stripe checkout sessions for plan upgrades (monthly or annual) |
 | `customer-portal` | Opens the Stripe billing self-service portal |
 | `stripe-webhook` | Handles Stripe subscription lifecycle events |
 | `check-subscription` | Returns current subscription tier (DB-cached) |
+| `get-free-credits` | Grants free/trial/referral usage credits |
 | `bulk-generate-descriptions` | Batch AI description generation for bulk listing flows |
+| `system-status` | Health/status check endpoint for internal monitoring |
 
 ### Database Tables (Supabase PostgreSQL + PL/pgSQL)
 
@@ -170,6 +199,10 @@ The platform goes far beyond listing creation: it includes a real-time analytics
 | `market_price_history` | Time-series price data per market watch |
 | `reprice_rules` | Auto-repricing rule definitions |
 | `relist_history` | Audit log for relist actions |
+| `category_mappings` | Learned item-type → eBay category mappings with confidence scoring |
+| `category_aspects_cache` | Cached eBay required/recommended item specifics per category (7-day TTL) |
+| `ebay_taxonomy_cache` | Full eBay category tree with breadcrumbs, refreshed weekly |
+| `category_hygiene_log` | Execution history for the weekly category hygiene job |
 
 ---
 
@@ -198,12 +231,14 @@ The platform goes far beyond listing creation: it includes a real-time analytics
 
 ## 💳 Pricing Tiers
 
-| Tier | Price | Listings / Month | Highlights |
-|---|---|---|---|
-| **Free** | $0 | 6 | Basic AI recognition, draft saving |
-| **Starter** | $19/mo | 25 | eBay publishing, basic AI enhancement |
-| **Pro** | $49/mo | 200 | Voice notes, melt protection, analytics, sold comps, market research |
-| **Shop** | $99/mo | ~1,200 | All features + teams, auto-optimization, unlimited market watches |
+| Tier | Monthly | Annual | Listings / Month | Highlights |
+|---|---|---|---|---|
+| **Free** | $0 | — | 6 | Basic AI recognition, draft saving |
+| **Starter** | $19/mo | $190/yr | 25 | eBay publishing, basic AI enhancement |
+| **Pro** | $49/mo | $490/yr | 200 | Voice notes, melt protection, analytics, sold comps, market research |
+| **Shop** | $99/mo | $990/yr | ~1,200 | All features + teams, auto-optimization, unlimited market watches |
+
+Annual plans are billed once per year at a discount versus paying monthly, managed through Stripe Checkout.
 
 ---
 
@@ -211,18 +246,23 @@ The platform goes far beyond listing creation: it includes a real-time analytics
 
 | Page | Route | Description |
 |---|---|---|
-| Home / Analyze | `/home` | Main listing creation page (upload photos, AI analysis, publish) |
+| Landing | `/landing` | Public marketing page shown to signed-out visitors |
+| Home | `/home` | Post-login landing dashboard |
+| Analyze | `/analyze` | Listing creation page (upload photos/video, AI analysis, publish) |
 | Dashboard | `/dashboard` | Analytics overview, active listings table, competitor cards |
+| Listings | `/listings` | Dedicated eBay listings management view |
 | Drafts | `/drafts` | Saved draft listings |
 | Market Research | `/market` | Keyword research, saved watches, price trend charts |
 | Reprice Rules | `/reprice-rules` | Auto-repricing rule management |
 | Profit Report | `/profit-report` | P&L report with COGS integration + CSV export |
 | Bulk Listing | `/bulk` | CSV-based bulk listing upload |
 | Bulk COGS Editor | `/cogs-editor` | Batch COGS entry for existing listings |
+| Historical COGS | `/historical-cogs` | Backfill/review COGS for previously published listings |
 | Settings | `/settings` | Profile, eBay connection, integrations |
-| Billing | `/billing` | Subscription management via Stripe portal |
+| Billing | `/billing` | Subscription management via Stripe portal (monthly/annual) |
 | Team | `/team` | Organization member management |
 | Admin | `/admin` | Admin panel (internal) |
+| Terms / Privacy | `/terms`, `/privacy` | In-app legal & policy pages |
 
 ---
 
